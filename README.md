@@ -67,7 +67,7 @@ v_2.results = {{name = "fire-armor", amount = 1, type = "item"}}
 local v_1 = v_2
 data.extend({v_0, v_1})
 ```
-And all of that AT RUNTIME
+And all of that AT RUNTIME as it parses the IL of methods directly instead of relying on parsing c# source
 
 
 
