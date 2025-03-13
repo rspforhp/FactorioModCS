@@ -123,4 +123,4 @@ local recipe = {
 }
 
 data:extend{fireArmor, recipe}
-```lua
+```
