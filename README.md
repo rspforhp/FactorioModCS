@@ -55,7 +55,7 @@ into
 ```lua
 local v_0 = table.deepcopy(data.raw["armor"]["heavy-armor"])
 v_0.name = "fire-armor"
-v_0.icons = {{icon = v_0.icon, icon_size = v_0.icon_size, tint = {r = 1, g = 0, b = 0, a = 0,3}}}
+v_0.icons = {{icon = v_0.icon, icon_size = v_0.icon_size, tint = {r = 1, g = 0, b = 0, a = 0.3}}}
 v_0.resistances = {{type = "physical", decrease = 6, percent = 10}, {type = "explosion", decrease = 10, percent = 30}, {type = "acid", decrease = 5, percent = 30}, {type = "fire", decrease = 0, percent = 100}}
 local v_2 = {}
 v_2.type = "recipe"

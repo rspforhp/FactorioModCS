@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -673,5 +674,7 @@ public class LuaNtFile
     public LuaNtFile(string relativePath)
     {
         RelativePath = relativePath;
+        CultureInfo.CurrentCulture=CultureInfo.InvariantCulture;
+        
     }
 }
