@@ -1,4 +1,5 @@
 using FactorioModCS.Json;
+using LuaNt.LuaFunctions;
 
 namespace FactorioModCS;
 
@@ -42,7 +43,7 @@ public static class FactorioModCompiler
             }
             //
             var infoJson=Path.Combine(modFolder, "info.json");
-            File.WriteAllText(infoJson,mod.Info.ToString());
+            File.WriteAllText(infoJson,mod.Info.TryMakeLua());
 
             mod.Data.ModPath = modFolder;
             mod.Data.Compile();

@@ -19,12 +19,7 @@ public record ModInfo
     public readonly  MajorMinorVersion? factorio_version = null;
     public readonly  ModDependency[]? dependencies = null;
 
-    public override string ToString()
-    {
-         StringBuilder b=new StringBuilder();
-         b.Append(this.TryMakeLua());
-         return b.ToString();
-    }
+
 
     public static bool IsNameValid(string n)
     {

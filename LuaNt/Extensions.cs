@@ -77,8 +77,8 @@ public static class Extensions
             {
                 var v = field.GetValue(o);
                 bool isNullable = field.GetCustomAttribute<NullableAttribute>() != null ||
-                                  field.FieldType == typeof(string) && v == null;
-                if (!isNullable)
+                                  field.FieldType == typeof(string);
+                if (!isNullable|| v!=null)
                 {
                     if (v is Array ar)
                     {

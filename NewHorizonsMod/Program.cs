@@ -56,6 +56,7 @@ m.Data += delegate()
         ],
         results = [(ProductPrototype)new ItemProductPrototype(){name =new("fire-armor"), amount = 1}]
     };
+    if (recipe.energy_required == 8) recipe.energy_required = 10;
     data.extend([fireArmor, recipe]);
 };
 FactorioModCompiler.Compile();

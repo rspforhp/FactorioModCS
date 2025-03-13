@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -37,6 +38,33 @@ public class LuaNtFile
 
     private class MethodCall
     {
+        public string Operator;
+        public MethodCall OperatorLeft;
+        public MethodCall OperatorRight;
+
+        public MethodCall(MethodCall right, MethodCall left, string op,Instruction il)
+        {
+            this.OperatorLeft = left;
+            this.OperatorRight = right;
+            this.Operator = op;
+            this.Instruction = il;
+        }
+        
+        public ILLabel Label;
+        public Instruction LabelStart;
+        public MethodCall Condition;
+        public bool _negateCondition;
+
+        public MethodCall(ILLabel label, Instruction labelStart,Instruction t,MethodCall condition,bool negateCondition=false)
+        {
+            this.Label = label;
+            this.LabelStart = labelStart;
+            this.Instruction = t;
+            Condition = condition;
+            _negateCondition = negateCondition;
+        }
+        
+        
         public MethodCall ArrayValue;
         public MethodCall ArrayIndex;
         public MethodCall Array;
@@ -45,6 +73,7 @@ public class LuaNtFile
 
         public MethodCall ArraySize;
 
+        
         public MethodCall(MethodCall newArraySize)
         {
             this.ArraySize = newArraySize;
@@ -81,7 +110,7 @@ public class LuaNtFile
 
         public string InvokeChars;
         public MethodBase Method;
-        public Instruction Instruction;
+        public  Instruction Instruction;
         public List<Instruction> InstructionsRef;
         public List<MethodCall> InvokeParams = new List<MethodCall>();
         public MethodCall Instance;
@@ -91,9 +120,23 @@ public class LuaNtFile
 
         public string Make(bool arInit = false,List<MethodCall> toRemove=null)
         {
+            
+            if (LabelStart != null)
+            {
+                var where = $"_{this.Instruction.Offset}_";
+                if(Condition==null)
+                return $"goto {where}";
+                else 
+                    return $"if {(_negateCondition?"not":"")} ({Condition.Make()}) then\n\tgoto {where}\nend";
+            }
+            
+            if (OperatorLeft != null && OperatorRight != null)
+            {
+                return $"{OperatorLeft.Make()} {Operator} {OperatorRight.Make()}";
+            }
             if (FakeValue != null)
             {
-                return $"{Fake} = {FakeValue}";
+                return FakeValue;
             }
             if (ArraySize != null)
             {
@@ -124,7 +167,7 @@ public class LuaNtFile
                         {
                             var s = (string)v;
                             if (!s.StartsWith("\"")) s = $"\"{s}\"";
-                            InvokeParams.Add(new MethodCall("type",s));
+                            InvokeParams.Add(new MethodCall("type",s,null));
 
                         }
                     }
@@ -146,7 +189,6 @@ public class LuaNtFile
             if (VariableId != null && !declaredLocal.Contains(Name))
             {
                 declaredLocal.Add(Name);
-                sb.Append("local ");
             }
 
             sb.Append(Name);
@@ -164,6 +206,19 @@ public class LuaNtFile
             {
                 var pl = InvokeParams.OrderBy(a => a.InitArrayWhere == null ? -1 : InitArrayWhere)
                     .Select(a => a.Make(ArraySize != null,new List<MethodCall>(){this})).ToList();
+                if (this.Method != null)
+                {
+                    var pr = Method.GetParameters();
+                    for (int i = 0; i < Math.Min(pl.Count,pr.Length); i++)
+                    {
+                        if (pr[i].ParameterType == typeof(bool))
+                        {
+                            if (pl[i] == "1") pl[i] = "true";
+                            else if (pl[i] == "0") pl[i] = "false";
+                            else throw new Exception("Not true");
+                        }
+                    }
+                }
                 sb.Append(string.Join(", ",pl ));
             }
             if (InvokeChars?.Length == 2)
@@ -171,22 +226,33 @@ public class LuaNtFile
             return sb.ToString();
         }
 
-        public MethodCall(int variableId, string variableName, MethodCall set)
+        public MethodCall(int variableId, string variableName, MethodCall set,Instruction il)
         {
             this.VariableId = variableId;
             this.Name = variableName;
             this.VariableSetValue = set;
+            this.Instruction = il;
         }
 
-        public string Fake;
-        public string FakeValue;
-        public MethodCall(string fake, string value)
+        public override string ToString()
         {
-            this.Fake = fake;
-            this.FakeValue = value;
+            if (Instruction != null) return Instruction.ToString();
+            else return "grrrr";
         }
-        public MethodCall(int variableId, string variableName)
+
+        public string FakeValue;
+        public MethodCall(string fake, string value,Instruction il)
         {
+            this.Instruction = il;
+            if (fake != null)
+            {
+                this.FakeValue = $"{fake} = {value}";
+            }
+           else this.FakeValue = value;
+        }
+        public MethodCall(int variableId, string variableName,Instruction il)
+        {
+            this.Instruction = il;
             this.VariableId = variableId;
             this.Name = variableName;
         }
@@ -209,13 +275,22 @@ public class LuaNtFile
         }
 
         public MethodCall(MethodBase method, Instruction instruction, List<Instruction> instructionsRef,
-            string invokeChars = "()")
+            string invokeChars = "()",bool isBool=false)
         {
             InvokeChars = invokeChars;
             Method = method;
             Instruction = instruction;
             InstructionsRef = instructionsRef;
             Name = Method?.Name?.Replace("get_", "")?.Replace("set_", "");
+            if (isBool)
+            {
+                if (Name == "1") Name = "true";
+                else if (Name == "0") Name = "false";
+                else
+                {
+                    throw new Exception("Not true");
+                }
+            }
             if (IsProperty)
             {
                 var pars = method.GetParameters();
@@ -233,6 +308,10 @@ public class LuaNtFile
                 }
             }
         }
+        
+        
+       
+        
 
         private static List<FieldInfo> fields =typeof(MethodCall).GetFields(AccessTools.all).ToList().FindAll(a=>a.FieldType==typeof(MethodCall)||a.FieldType==typeof(List<MethodCall>));
         public bool Contains(MethodCall methodCall,int nest=0)
@@ -295,7 +374,6 @@ public class LuaNtFile
             {
                 var cur = ilInstructions[i];
                 var opCode = cur.OpCode;
-                if (opCode == OpCodes.Nop) continue;
 
                 int? stloc = null;
                 if (opCode == OpCodes.Stloc_0) stloc = 0;
@@ -304,7 +382,8 @@ public class LuaNtFile
                 else if (opCode == OpCodes.Stloc_3) stloc = 3;
                 else if (opCode == OpCodes.Stloc_S)
                 {
-                    throw new NotImplementedException();
+                    var op = (VariableDefinition)cur.Operand;
+                    stloc = op.Index;
                 }
 
                 int? ldloc = null;
@@ -314,7 +393,8 @@ public class LuaNtFile
                 else if (opCode == OpCodes.Ldloc_3) ldloc = 3;
                 else if (opCode == OpCodes.Ldloc_S)
                 {
-                    throw new NotImplementedException();
+                    var op = (VariableDefinition)cur.Operand;
+                    ldloc = op.Index;
                 }
 
                 float? ldcr4 = null;
@@ -383,18 +463,22 @@ public class LuaNtFile
                 else if (opCode == OpCodes.Ldstr)
                 {
                     stack.Push(new MethodCall(true, cur, ilInstructions));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (ldci4 != null)
                 {
                     stack.Push(new MethodCall(true, cur, ilInstructions, ldci4));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (ldcr4 != null)
                 {
                     stack.Push(new MethodCall(true, cur, ilInstructions, ldcr4));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (ldcr8 != null)
                 {
                     stack.Push(new MethodCall(true, cur, ilInstructions, ldcr8));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (stelem)
                 {
@@ -407,6 +491,7 @@ public class LuaNtFile
                 else if (opCode == OpCodes.Pop)
                 {
                     stack.Pop();
+                    methodCalls.Push(new MethodCall(null,null,cur));
                 }
                 else if (opCode == OpCodes.Ret)
                 {
@@ -421,15 +506,17 @@ public class LuaNtFile
                 {
                     if (stack.Count == 0) throw new Exception("???");
                     var v = stack.Pop();
-                    methodCalls.Push(new MethodCall(stloc.Value, $"v_{stloc.Value}", v));
+                    methodCalls.Push(new MethodCall(stloc.Value, $"v_{stloc.Value}", v,cur));
                 }
                 else if (ldloc != null)
                 {
-                    stack.Push(new MethodCall(ldloc.Value, $"v_{ldloc.Value}"));
+                    stack.Push(new MethodCall(ldloc.Value, $"v_{ldloc.Value}",cur));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (opCode == OpCodes.Newarr)
                 {
                     stack.Push(new MethodCall(stack.Pop()));
+                    methodCalls.Push(stack.Peek());
                 }
                 else if (opCode == OpCodes.Newobj)
                 {
@@ -443,11 +530,90 @@ public class LuaNtFile
                     {
                         throw new NotImplementedException();
                     }
+                    methodCalls.Push(stack.Peek());
                     //stack.Push(new MethodCall(null, cur,ilInstructions,invokeChars:"{}"));
                 }
                 else if (opCode == OpCodes.Dup)
                 {
                     stack.Push(stack.Peek());
+                }
+                else if (opCode == OpCodes.Br_S)
+                {
+                    ILLabel where = (ILLabel)cur.Operand;
+                    var whereTarget = where.Target;
+                    methodCalls.Push(new MethodCall(where,whereTarget,cur,null));
+                }
+                else if (opCode == OpCodes.Brtrue_S)
+                {
+                    ILLabel where = (ILLabel)cur.Operand;
+                    var whereTarget = where.Target;
+                    methodCalls.Push(new MethodCall(where,whereTarget,cur,stack.Pop()));
+                }
+                else if (opCode == OpCodes.Brfalse_S)
+                {
+                    ILLabel where = (ILLabel)cur.Operand;
+                    var whereTarget = where.Target;
+                    methodCalls.Push(new MethodCall(where,whereTarget,cur,stack.Pop(),true));
+                }
+                else if (opCode == OpCodes.Add)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "+",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Mul)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "*",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Sub)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "-",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Div)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "/",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Clt)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "<",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Cgt)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, ">",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Ceq)
+                {
+                    var right = stack.Pop();
+                    var left = stack.Pop();
+                    var m = new MethodCall(right, left, "==",cur);
+                    methodCalls.Push(m);
+                    stack.Push(m);
+                }
+                else if (opCode == OpCodes.Nop)
+                {
+                    methodCalls.Push(new MethodCall(null,null,cur));
                 }
                 else
                     throw new Exception($"Unhandled IL instruction {opCode} {cur}");
@@ -469,18 +635,38 @@ public class LuaNtFile
                     }
             }
 
-          
+            foreach (var call in l.ToList())
+            {
+                if (call.LabelStart != null)
+                {
+                    var labelStartmethodIndex = methods.FindIndex(a=>a.Instruction==call.LabelStart);
+                    var labelStartmethod = methods[labelStartmethodIndex];
+                    while(labelStartmethod.Instruction.OpCode==OpCodes.Nop)labelStartmethod=methods[++labelStartmethodIndex];
+                    var index=l.FindIndex(a => a.Contains(labelStartmethod));
+                    var last=l.FindLastIndex(a => a.Contains(labelStartmethod));
+                    if (index != last) throw new NotImplementedException("!!!");
+                    if (index == -1) throw new Exception("wtf");
+                    l.Insert(index, new MethodCall(null,$"::_{call.Instruction.Offset}_::",null));
+                }
+            }
 
+
+
+      
             foreach (var call in l)
             {
                 var str = call.Make();
-                sb.AppendLine(str);
+                if(!string.IsNullOrEmpty(str))
+                  sb.AppendLine(str);
                 Console.WriteLine(str);
             }
 
             Console.WriteLine($"Processing action {expr}");
         }
-
+        foreach (var loc in declaredLocal)
+        {
+            sb.Insert(0, $"local {loc} = {{}} --premade local\n");
+        }
         File.WriteAllText(FullPath, sb.ToString());
     }
 
