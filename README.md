@@ -60,7 +60,7 @@ v_0.resistances = {{type = "physical", decrease = 6, percent = 10}, {type = "exp
 local v_2 = {}
 v_2.type = "recipe"
 v_2.name = "fire-armor"
-v_2.enabled = 1
+v_2.enabled = true
 v_2.energy_required = 8
 v_2.ingredients = {{name = "copper-plate", amount = 200, type = "item"}, {name = "steel-plate", amount = 50, type = "item"}}
 v_2.results = {{name = "fire-armor", amount = 1, type = "item"}}
